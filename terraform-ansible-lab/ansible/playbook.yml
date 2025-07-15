@@ -1,0 +1,8 @@
+- name: Actualizar contenido HTML
+  hosts: webservers
+  become: yes
+  tasks:
+    - name: Reemplazar index.html con archivo local
+      copy:
+        src: index.html
+        dest: /var/www/html/index.html

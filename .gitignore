@@ -27,3 +27,6 @@ terraform.tfvars.json
 *.log
 *.bak
 *.DS_Store
+terraform-ansible-lab/demo-key.pem
+terraform-ansible-lab/policies.json
+terraform-lab/s3/policies.json
