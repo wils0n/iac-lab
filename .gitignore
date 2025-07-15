@@ -1,0 +1,29 @@
+
+# Archivos de estado de Terraform
+*.tfstate
+*.tfstate.backup
+
+# Archivos de crash log
+crash.log
+
+# Planes de Terraform
+*.tfplan
+
+# Archivos de override (no se recomienda hacer commit de estos)
+*.override.tf
+*.override.tf.json
+override.tf
+override.tf.json
+
+# Archivos de configuración de Terraform (credenciales locales, etc.)
+.terraform/
+.terraform.lock.hcl
+
+# Archivos de salida generados localmente
+terraform.tfvars
+terraform.tfvars.json
+
+# Opcional: ignorar archivos de log o debug
+*.log
+*.bak
+*.DS_Store
