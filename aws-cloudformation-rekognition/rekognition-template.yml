@@ -1,0 +1,156 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Lambda + Rekognition + API Gateway for image classification
+
+Resources:
+
+  RekognitionLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: RekognitionLambdaExecutionRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: RekognitionLambdaPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - rekognition:DetectLabels
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "*"
+
+  RekognitionLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: RekognitionImageLabeler
+      Handler: index.lambda_handler
+      Role: !GetAtt RekognitionLambdaRole.Arn
+      Runtime: python3.12
+      Timeout: 10
+      MemorySize: 256
+      Code:
+        ZipFile: |
+          import boto3
+          import base64
+          import json
+          import cgi
+          import io
+
+          rekognition = boto3.client('rekognition')
+
+          def lambda_handler(event, context):
+              try:
+                  content_type = event.get('headers', {}).get('Content-Type') or event.get('headers', {}).get('content-type')
+                  body = event['body']
+
+                  if event.get('isBase64Encoded'):
+                      body = base64.b64decode(body)
+
+                  if content_type and 'multipart/form-data' in content_type:
+                      # Parse multipart form
+                      env = {'REQUEST_METHOD': 'POST'}
+                      headers = {'content-type': content_type}
+                      fs = cgi.FieldStorage(fp=io.BytesIO(body), environ=env, headers=headers)
+
+                      if 'file' not in fs:
+                          raise Exception("No 'file' field in form data.")
+
+                      image_data = fs['file'].file.read()
+
+                  elif content_type and 'application/json' in content_type:
+                      # Parse JSON with base64
+                      json_body = json.loads(body if isinstance(body, str) else body.decode())
+                      if 'image' not in json_body:
+                          raise Exception("No 'image' key in JSON body.")
+                      image_data = base64.b64decode(json_body['image'])
+
+                  else:
+                      raise Exception(f"Unsupported Content-Type: {content_type}")
+
+                  response = rekognition.detect_labels(
+                      Image={'Bytes': image_data},
+                      MaxLabels=5,
+                      MinConfidence=70
+                  )
+
+                  labels = [label['Name'] for label in response['Labels']]
+                  return {
+                      "statusCode": 200,
+                      "headers": {
+                          "Content-Type": "application/json",
+                          "Access-Control-Allow-Origin": "*"
+                      },
+                      "body": json.dumps({"labels": labels})
+                  }
+
+              except Exception as e:
+                  return {
+                      "statusCode": 400,
+                      "headers": {
+                          "Content-Type": "application/json",
+                          "Access-Control-Allow-Origin": "*"
+                      },
+                      "body": json.dumps({"error": str(e)})
+                  }
+
+
+  RekognitionApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: RekognitionApi
+
+  RekognitionApiResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt RekognitionApi.RootResourceId
+      PathPart: detect
+      RestApiId: !Ref RekognitionApi
+
+  RekognitionApiMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RekognitionApi
+      ResourceId: !Ref RekognitionApiResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: 
+          Fn::Sub: 
+            - arn:aws:apigateway:${Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations
+            - Region: !Ref "AWS::Region"
+              LambdaArn: !GetAtt RekognitionLambdaFunction.Arn
+
+  RekognitionApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn: RekognitionApiMethod
+    Properties:
+      RestApiId: !Ref RekognitionApi
+      StageName: prod
+
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref RekognitionLambdaFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: 
+        Fn::Sub: arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RekognitionApi}/*/POST/detect
+
+Outputs:
+  ApiEndpoint:
+    Description: "API endpoint to invoke Lambda via POST"
+    Value: 
+      Fn::Sub: https://${RekognitionApi}.execute-api.${AWS::Region}.amazonaws.com/prod/detect
