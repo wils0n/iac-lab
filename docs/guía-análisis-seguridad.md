@@ -1,4 +1,4 @@
-# Laboratorio: Infraestructura como Código Seguro
+# Laboratorio: Análisis de seguridad de la Infraestructura como Código
 
 ## Capítulo 1: Instalación y Configuración del Entorno
 
@@ -274,6 +274,8 @@ trivy config ./cloud-examples/azure/azure-insecure.tf --format json > trivy-azur
 #### PowerShell
 
 ```powershell
+# Escanear configuración aws-cloudformation
+trivy config ./aws-cloudformation-rekognition/rekognition-template.yml
 
 # Escanear configuración insegura de AWS
 trivy config ./cloud-examples/aws/aws-insecure.tf
@@ -300,6 +302,9 @@ trivy config ./cloud-examples/azure/azure-insecure.tf --format json > trivy-azur
 #### Bash
 
 ```bash
+# Escanear configuración aws-cloudformation
+checkov -f ./aws-cloudformation-rekognition/rekognition-template.yml
+
 # Escanear configuración insegura de AWS
 checkov -f ./cloud-examples/aws/aws-insecure.tf
 
