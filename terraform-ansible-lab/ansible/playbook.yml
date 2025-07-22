@@ -1,8 +1,230 @@
-- name: Actualizar contenido HTML
+---
+# Playbook principal para configuración de servidores web
+- name: Configuración completa de servidores web
   hosts: webservers
   become: yes
+  gather_facts: yes
+  vars:
+    apache_service: httpd
+    web_root: /var/www/html
+    server_admin: admin@example.com
+    
   tasks:
-    - name: Reemplazar index.html con archivo local
+    # Fase 1: Actualización del sistema
+    - name: Actualizar paquetes del sistema
+      yum:
+        name: "*"
+        state: latest
+        update_cache: yes
+      tags: ['system', 'update']
+
+    - name: Instalar paquetes básicos
+      yum:
+        name:
+          - curl
+          - wget
+          - vim
+          - htop
+          - git
+        state: present
+      tags: ['system', 'packages']
+
+    # Fase 2: Configuración del servidor web
+    - name: Instalar Apache (httpd)
+      yum:
+        name: "{{ apache_service }}"
+        state: present
+      tags: ['webserver', 'install']
+
+    - name: Iniciar y habilitar Apache
+      systemd:
+        name: "{{ apache_service }}"
+        state: started
+        enabled: yes
+      tags: ['webserver', 'service']
+
+    - name: Configurar firewall para HTTP y HTTPS
+      firewalld:
+        service: "{{ item }}"
+        permanent: yes
+        state: enabled
+        immediate: yes
+      loop:
+        - http
+        - https
+      ignore_errors: yes  # En caso de que firewalld no esté disponible
+      tags: ['webserver', 'firewall']
+
+    # Fase 3: Configuración de contenido web
+    - name: Crear directorio de backup
+      file:
+        path: "{{ web_root }}/backup"
+        state: directory
+        owner: apache
+        group: apache
+        mode: '0755'
+      tags: ['webserver', 'setup']
+
+    - name: Hacer backup del index.html original
       copy:
-        src: index.html
-        dest: /var/www/html/index.html
+        src: "{{ web_root }}/index.html"
+        dest: "{{ web_root }}/backup/index.html.backup"
+        remote_src: yes
+        backup: yes
+      ignore_errors: yes
+      tags: ['webserver', 'backup']
+
+    - name: Crear página web personalizada
+      template:
+        src: index.html.j2
+        dest: "{{ web_root }}/index.html"
+        owner: apache
+        group: apache
+        mode: '0644'
+        backup: yes
+      notify: restart apache
+      tags: ['webserver', 'content']
+
+    - name: Crear página de información del sistema
+      template:
+        src: info.html.j2
+        dest: "{{ web_root }}/info.html"
+        owner: apache
+        group: apache
+        mode: '0644'
+      tags: ['webserver', 'content']
+
+    - name: Configurar archivo de configuración de Apache
+      template:
+        src: httpd.conf.j2
+        dest: /etc/httpd/conf/httpd.conf
+        backup: yes
+      notify: restart apache
+      tags: ['webserver', 'config']
+
+    # Fase 4: Verificación y monitoreo
+    - name: Verificar que Apache está ejecutándose
+      service:
+        name: "{{ apache_service }}"
+        state: started
+      tags: ['webserver', 'verify']
+
+    - name: Verificar conectividad web local
+      uri:
+        url: "http://localhost"
+        method: GET
+        return_content: yes
+      register: web_check
+      tags: ['webserver', 'verify']
+
+    - name: Mostrar resultado de la verificación
+      debug:
+        msg: "Servidor web respondiendo correctamente: {{ web_check.status }}"
+      when: web_check.status == 200
+      tags: ['webserver', 'verify']
+
+    # Fase 5: Información del servidor
+    - name: Recopilar información del sistema
+      setup:
+      tags: ['info']
+
+    - name: Mostrar información del servidor
+      debug:
+        msg: |
+          Servidor: {{ ansible_hostname }}
+          IP: {{ ansible_default_ipv4.address }}
+          OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+          Memoria: {{ ansible_memtotal_mb }}MB
+          CPU: {{ ansible_processor_count }} cores
+      tags: ['info']
+
+  handlers:
+    - name: restart apache
+      systemd:
+        name: "{{ apache_service }}"
+        state: restarted
+
+# Playbook específico para servidores de base de datos
+- name: Configuración de servidores de base de datos
+  hosts: dbservers
+  become: yes
+  gather_facts: yes
+  
+  tasks:
+    - name: Actualizar sistema (DB servers)
+      yum:
+        name: "*"
+        state: latest
+        update_cache: yes
+      tags: ['database', 'update']
+
+    - name: Instalar MariaDB
+      yum:
+        name:
+          - mariadb-server
+          - mariadb
+          - python3-PyMySQL
+        state: present
+      tags: ['database', 'install']
+
+    - name: Iniciar y habilitar MariaDB
+      systemd:
+        name: mariadb
+        state: started
+        enabled: yes
+      tags: ['database', 'service']
+
+    - name: Configurar firewall para MySQL
+      firewalld:
+        service: mysql
+        permanent: yes
+        state: enabled
+        immediate: yes
+      ignore_errors: yes
+      tags: ['database', 'firewall']
+
+    - name: Mostrar estado de la base de datos
+      debug:
+        msg: "Base de datos MariaDB configurada en {{ ansible_hostname }}"
+      tags: ['database', 'info']
+
+# Playbook para servidores de balanceador de carga
+- name: Configuración de balanceadores de carga
+  hosts: loadbalancers
+  become: yes
+  gather_facts: yes
+  
+  tasks:
+    - name: Actualizar sistema (Load Balancers)
+      yum:
+        name: "*"
+        state: latest
+        update_cache: yes
+      tags: ['loadbalancer', 'update']
+
+    - name: Instalar Nginx
+      yum:
+        name: nginx
+        state: present
+      tags: ['loadbalancer', 'install']
+
+    - name: Configurar Nginx como balanceador
+      template:
+        src: nginx.conf.j2
+        dest: /etc/nginx/nginx.conf
+        backup: yes
+      notify: restart nginx
+      tags: ['loadbalancer', 'config']
+
+    - name: Iniciar y habilitar Nginx
+      systemd:
+        name: nginx
+        state: started
+        enabled: yes
+      tags: ['loadbalancer', 'service']
+
+  handlers:
+    - name: restart nginx
+      systemd:
+        name: nginx
+        state: restarted

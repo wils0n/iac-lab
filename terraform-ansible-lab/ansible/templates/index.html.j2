@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ ansible_hostname }} - Servidor Configurado con Ansible</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 30px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .info-card {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            padding: 20px;
+            backdrop-filter: blur(5px);
+        }
+        .info-card h3 {
+            margin-top: 0;
+            color: #ffeb3b;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: #4caf50;
+            margin-right: 8px;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        .footer {
+            text-align: center;
+            margin-top: 40px;
+            font-size: 0.9em;
+            opacity: 0.8;
+        }
+        .links {
+            text-align: center;
+            margin: 20px 0;
+        }
+        .links a {
+            color: #ffeb3b;
+            text-decoration: none;
+            margin: 0 15px;
+            padding: 10px 20px;
+            border: 2px solid #ffeb3b;
+            border-radius: 25px;
+            transition: all 0.3s ease;
+        }
+        .links a:hover {
+            background-color: #ffeb3b;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 Servidor Web Configurado</h1>
+            <p><span class="status-indicator"></span>Terraform + Ansible en acción</p>
+        </div>
+
+        <div class="info-grid">
+            <div class="info-card">
+                <h3>🖥️ Información del Servidor</h3>
+                <p><strong>Hostname:</strong> {{ ansible_hostname }}</p>
+                <p><strong>IP Address:</strong> {{ ansible_default_ipv4.address }}</p>
+                <p><strong>Sistema Operativo:</strong> {{ ansible_distribution }} {{ ansible_distribution_version }}</p>
+                <p><strong>Arquitectura:</strong> {{ ansible_architecture }}</p>
+            </div>
+
+            <div class="info-card">
+                <h3>💾 Recursos del Sistema</h3>
+                <p><strong>Memoria Total:</strong> {{ (ansible_memtotal_mb/1024) | round(2) }} GB</p>
+                <p><strong>CPUs:</strong> {{ ansible_processor_count }} cores</p>
+                <p><strong>Modelo CPU:</strong> {{ ansible_processor[2] | default('N/A') }}</p>
+                <p><strong>Uptime:</strong> {{ ansible_uptime_seconds | int // 3600 }}h {{ (ansible_uptime_seconds | int % 3600) // 60 }}m</p>
+            </div>
+
+            <div class="info-card">
+                <h3>🌐 Configuración de Red</h3>
+                <p><strong>IP Pública:</strong> {{ ansible_default_ipv4.address }}</p>
+                <p><strong>Gateway:</strong> {{ ansible_default_ipv4.gateway | default('N/A') }}</p>
+                <p><strong>DNS:</strong> {{ ansible_dns.nameservers | join(', ') | default('N/A') }}</p>
+                <p><strong>Interfaces:</strong> {{ ansible_interfaces | length }} detectadas</p>
+            </div>
+
+            <div class="info-card">
+                <h3>⚙️ Estado de Servicios</h3>
+                <p><strong>Apache HTTP:</strong> <span style="color: #4caf50;">✅ Activo</span></p>
+                <p><strong>SSH:</strong> <span style="color: #4caf50;">✅ Activo</span></p>
+                <p><strong>Firewall:</strong> <span style="color: #4caf50;">✅ Configurado</span></p>
+                <p><strong>Última actualización:</strong> {{ ansible_date_time.date }}</p>
+            </div>
+        </div>
+
+        <div class="links">
+            <a href="/info.html">📊 Info Detallada</a>
+            <a href="/backup/">📁 Backups</a>
+            <a href="https://github.com/ansible/ansible" target="_blank">📚 Ansible Docs</a>
+        </div>
+
+        <div class="footer">
+            <p>🔧 Configurado automáticamente con <strong>Ansible</strong> | 
+               ☁️ Provisionado con <strong>Terraform</strong> | 
+               📅 {{ ansible_date_time.date }} {{ ansible_date_time.time }}</p>
+            <p>🏷️ Proyecto: {{ project | default('terraform-ansible-lab') }} | 
+               🌍 Entorno: {{ environment | default('production') }}</p>
+        </div>
+    </div>
+</body>
+</html>

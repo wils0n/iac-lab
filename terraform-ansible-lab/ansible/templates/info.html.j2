@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Información del Sistema - {{ ansible_hostname }}</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background-color: #1e1e1e;
+            color: #00ff00;
+            margin: 0;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .terminal {
+            background-color: #000;
+            border: 2px solid #00ff00;
+            border-radius: 10px;
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+            box-shadow: 0 0 20px #00ff00;
+        }
+        .prompt {
+            color: #00ff00;
+            font-weight: bold;
+        }
+        .command {
+            color: #ffff00;
+        }
+        .output {
+            color: #ffffff;
+            margin-left: 20px;
+            white-space: pre-wrap;
+        }
+        .section {
+            margin-bottom: 30px;
+            border-bottom: 1px solid #333;
+            padding-bottom: 20px;
+        }
+        h1, h2 {
+            color: #00ffff;
+            text-shadow: 0 0 10px #00ffff;
+        }
+        .back-link {
+            display: inline-block;
+            margin-top: 20px;
+            color: #00ff00;
+            text-decoration: none;
+            border: 1px solid #00ff00;
+            padding: 10px 20px;
+            border-radius: 5px;
+        }
+        .back-link:hover {
+            background-color: #00ff00;
+            color: #000;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 10px 0;
+        }
+        th, td {
+            border: 1px solid #333;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #333;
+            color: #00ffff;
+        }
+    </style>
+</head>
+<body>
+    <div class="terminal">
+        <h1>🖥️ Sistema de Información - {{ ansible_hostname }}</h1>
+        
+        <div class="section">
+            <span class="prompt">root@{{ ansible_hostname }}:~# </span><span class="command">uname -a</span>
+            <div class="output">{{ ansible_kernel }} {{ ansible_hostname }} {{ ansible_kernel_version }} {{ ansible_architecture }}</div>
+        </div>
+
+        <div class="section">
+            <span class="prompt">root@{{ ansible_hostname }}:~# </span><span class="command">cat /etc/os-release</span>
+            <div class="output">NAME="{{ ansible_distribution }}"
+VERSION="{{ ansible_distribution_version }}"
+ID={{ ansible_distribution | lower }}
+PRETTY_NAME="{{ ansible_distribution }} {{ ansible_distribution_version }}"</div>
+        </div>
+
+        <div class="section">
+            <span class="prompt">root@{{ ansible_hostname }}:~# </span><span class="command">free -h</span>
+            <div class="output">              total        used        free      shared  buff/cache   available
+Mem:          {{ (ansible_memtotal_mb/1024) | round(1) }}Gi       {{ ((ansible_memtotal_mb - ansible_memfree_mb)/1024) | round(1) }}Gi       {{ (ansible_memfree_mb/1024) | round(1) }}Gi        0Mi        0Mi        {{ (ansible_memfree_mb/1024) | round(1) }}Gi
+Swap:         {{ (ansible_swaptotal_mb/1024) | round(1) }}Gi       {{ ((ansible_swaptotal_mb - ansible_swapfree_mb)/1024) | round(1) }}Gi       {{ (ansible_swapfree_mb/1024) | round(1) }}Gi</div>
+        </div>
+
+        <div class="section">
+            <span class="prompt">root@{{ ansible_hostname }}:~# </span><span class="command">lscpu | head -20</span>
+            <div class="output">Architecture:                    {{ ansible_architecture }}
+CPU op-mode(s):                  32-bit, 64-bit
+Byte Order:                      Little Endian
+CPU(s):                          {{ ansible_processor_count }}
+Thread(s) per core:              {{ ansible_processor_threads_per_core }}
+Core(s) per socket:              {{ ansible_processor_cores }}
+Socket(s):                       {{ ansible_processor_count }}
+Model name:                      {{ ansible_processor[2] | default('N/A') }}</div>
+        </div>
+
+        <div class="section">
+            <span class="prompt">root@{{ ansible_hostname }}:~# </span><span class="command">df -h</span>
+            <div class="output">Filesystem      Size  Used Avail Use% Mounted on
+{% for mount in ansible_mounts %}
+{{ mount.device | ljust(15) }} {{ (mount.size_total/1024/1024/1024) | round(1) | ljust(5) }}G {{ ((mount.size_total - mount.size_available)/1024/1024/1024) | round(1) | ljust(4) }}G {{ (mount.size_available/1024/1024/1024) | round(1) | ljust(5) }}G {{ (((mount.size_total - mount.size_available) * 100 / mount.size_total) | round(0) | int) | ljust(3) }}% {{ mount.mount }}
+{% endfor %}</div>
+        </div>
+
+        <div class="section">
+            <span class="prompt">root@{{ ansible_hostname }}:~# </span><span class="command">ip addr show</span>
+            <div class="output">{% for interface in ansible_interfaces %}
+{{ loop.index }}: {{ interface }}: &lt;{{ ansible_facts[interface]['flags'] | join(',') | upper }}&gt; mtu {{ ansible_facts[interface]['mtu'] | default('N/A') }} qdisc pfifo_fast state UP qlen 1000
+{% if ansible_facts[interface]['ipv4'] is defined %}
+    inet {{ ansible_facts[interface]['ipv4']['address'] }}/{{ ansible_facts[interface]['ipv4']['netmask'] }} brd {{ ansible_facts[interface]['ipv4']['broadcast'] | default('N/A') }} scope global {{ interface }}
+{% endif %}
+{% if ansible_facts[interface]['macaddress'] is defined %}
+    link/ether {{ ansible_facts[interface]['macaddress'] }} brd ff:ff:ff:ff:ff:ff
+{% endif %}
+{% endfor %}</div>
+        </div>
+
+        <div class="section">
+            <span class="prompt">root@{{ ansible_hostname }}:~# </span><span class="command">systemctl status httpd</span>
+            <div class="output">● httpd.service - The Apache HTTP Server
+   Loaded: loaded (/usr/lib/systemd/system/httpd.service; enabled; vendor preset: disabled)
+   Active: active (running) since {{ ansible_date_time.date }} {{ ansible_date_time.time }}; 1min ago
+     Docs: man:httpd.service(8)
+ Main PID: 1234 (httpd)
+   Status: "Processing requests..."</div>
+        </div>
+
+        <div class="section">
+            <span class="prompt">root@{{ ansible_hostname }}:~# </span><span class="command">ps aux | head -10</span>
+            <div class="output">USER       PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
+root         1  0.0  0.3 128356  6784 ?        Ss   {{ ansible_date_time.time }}   0:01 /usr/lib/systemd/systemd
+root         2  0.0  0.0      0     0 ?        S    {{ ansible_date_time.time }}   0:00 [kthreadd]
+apache    1234  0.0  0.5 224344 10240 ?        S    {{ ansible_date_time.time }}   0:00 /usr/sbin/httpd
+ansible   5678  0.0  0.2 116544  4096 pts/0    Ss   {{ ansible_date_time.time }}   0:00 -bash</div>
+        </div>
+
+        <div class="section">
+            <h2>🌐 Información de Red Detallada</h2>
+            <table>
+                <tr><th>Propiedad</th><th>Valor</th></tr>
+                <tr><td>Hostname</td><td>{{ ansible_hostname }}</td></tr>
+                <tr><td>FQDN</td><td>{{ ansible_fqdn | default('N/A') }}</td></tr>
+                <tr><td>IP Principal</td><td>{{ ansible_default_ipv4.address }}</td></tr>
+                <tr><td>Gateway</td><td>{{ ansible_default_ipv4.gateway | default('N/A') }}</td></tr>
+                <tr><td>DNS Servers</td><td>{{ ansible_dns.nameservers | join(', ') | default('N/A') }}</td></tr>
+                <tr><td>Dominio</td><td>{{ ansible_domain | default('N/A') }}</td></tr>
+            </table>
+        </div>
+
+        <div class="section">
+            <h2>📦 Variables de Ansible</h2>
+            <table>
+                <tr><th>Variable</th><th>Valor</th></tr>
+                <tr><td>Proyecto</td><td>{{ project | default('N/A') }}</td></tr>
+                <tr><td>Entorno</td><td>{{ environment | default('N/A') }}</td></tr>
+                <tr><td>Rol del Servidor</td><td>{{ server_role | default('N/A') }}</td></tr>
+                <tr><td>Servicio Web</td><td>{{ apache_service | default('N/A') }}</td></tr>
+                <tr><td>Directorio Web</td><td>{{ web_root | default('N/A') }}</td></tr>
+            </table>
+        </div>
+
+        <div class="section">
+            <span class="prompt">root@{{ ansible_hostname }}:~# </span><span class="command">date</span>
+            <div class="output">{{ ansible_date_time.weekday_name }} {{ ansible_date_time.month_name }} {{ ansible_date_time.day }} {{ ansible_date_time.time }} {{ ansible_date_time.tz }} {{ ansible_date_time.year }}</div>
+        </div>
+
+        <a href="/" class="back-link">⬅️ Volver al Inicio</a>
+    </div>
+</body>
+</html>
