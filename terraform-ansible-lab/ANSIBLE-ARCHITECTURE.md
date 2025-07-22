@@ -1,5 +1,233 @@
 # Arquitectura Ansible Multi-Grupo
 
+# Arquitectura Ansible Multi-Grupo
+
+## 🔄 **Terraform vs Ansible: División de Responsabilidades**
+
+### 🏗️ **Terraform - Provisión de Infraestructura**
+
+**¿Qué hace Terraform?**
+
+- **Crea la infraestructura física/virtual** en la nube
+- **Gestiona el ciclo de vida** de recursos de infraestructura
+- **Provisiona recursos** de manera declarativa
+- **Mantiene el estado** de la infraestructura
+
+#### 📋 **Responsabilidades específicas en nuestro lab:**
+
+```hcl
+# 1. PROVISIÓN DE INSTANCIAS EC2
+resource "aws_instance" "web" {
+  ami           = var.ami_id           # ✅ Selecciona la imagen del SO
+  instance_type = var.instance_type    # ✅ Define el tamaño de la máquina
+  key_name      = var.key_name         # ✅ Configura acceso SSH
+}
+
+# 2. CONFIGURACIÓN DE RED Y SEGURIDAD
+resource "aws_security_group" "web_sg" {
+  # ✅ Abre puertos (22 SSH, 80 HTTP)
+  # ✅ Configura reglas de firewall a nivel de red
+}
+
+# 3. CONFIGURACIÓN BÁSICA DEL SISTEMA
+user_data = <<-EOF
+  #!/bin/bash
+  yum update -y                    # ✅ Actualización inicial del sistema
+  yum install -y httpd            # ✅ Instalación básica de Apache
+  systemctl start httpd           # ✅ Inicio inicial del servicio
+  systemctl enable httpd          # ✅ Habilitación del servicio
+EOF
+```
+
+#### 🎯 **Terraform se encarga de:**
+
+- ☁️ **Infraestructura como código** (Infrastructure as Code)
+- 🌐 **Recursos de red** (VPC, Subnets, Security Groups)
+- 💻 **Instancias de servidores** (EC2, VM, Compute Engine)
+- 💾 **Almacenamiento** (EBS, S3, discos persistentes)
+- 🔐 **IAM y permisos** a nivel de infraestructura
+- 📊 **Outputs** (IPs, URLs, identificadores de recursos)
+
+### ⚙️ **Ansible - Configuración y Gestión**
+
+**¿Qué hace Ansible?**
+
+- **Configura el software** dentro de los servidores ya creados
+- **Gestiona aplicaciones** y servicios
+- **Mantiene la configuración** deseada en el tiempo
+- **Orquesta tareas** complejas entre múltiples servidores
+
+#### 📋 **Responsabilidades específicas en nuestro lab:**
+
+```yaml
+# 1. CONFIGURACIÓN DETALLADA DE SERVICIOS
+- name: Configurar Apache con templates personalizados
+  template:
+    src: httpd.conf.j2 # ✅ Configuración avanzada de Apache
+    dest: /etc/httpd/conf/httpd.conf
+
+# 2. GESTIÓN DE CONTENIDO WEB
+- name: Crear página web personalizada
+  template:
+    src: index.html.j2 # ✅ Contenido web dinámico
+    dest: /var/www/html/index.html
+
+# 3. CONFIGURACIÓN DE FIREWALL INTERNO
+- name: Configurar firewall detallado
+  firewalld: # ✅ Reglas de firewall a nivel de OS
+    service: "{{ item }}"
+    permanent: yes
+
+# 4. GESTIÓN DE USUARIOS Y PERMISOS
+- name: Configurar permisos de archivos
+  file:
+    owner: apache # ✅ Propietarios y permisos específicos
+    group: apache
+    mode: "0644"
+```
+
+#### 🎯 **Ansible se encarga de:**
+
+- 📦 **Gestión de paquetes** (yum, apt, chocolatey)
+- ⚙️ **Configuración de servicios** (httpd, nginx, mysql)
+- 🔧 **Files y templates** personalizados
+- 👥 **Usuarios y grupos** del sistema
+- 🔐 **Configuración de seguridad** detallada
+- 📊 **Monitoreo y verificación** de servicios
+- 🔄 **Actualizaciones** y mantenimiento continuo
+
+## 🔄 **Flujo de Trabajo: Terraform → Ansible**
+
+```mermaid
+graph TB
+    A[🚀 Ejecutar run.sh] --> B[🏗️ Terraform Plan]
+    B --> C[☁️ Terraform Apply]
+    C --> D[💻 Crear EC2 Instance]
+    D --> E[🌐 Configurar Security Group]
+    E --> F[📝 Generar IP en ip.txt]
+    F --> G[📋 Crear Inventario Ansible]
+    G --> H[🔍 Verificar SSH]
+    H --> I[⚙️ Ansible Playbook]
+    I --> J[📦 Instalar/Configurar Software]
+    J --> K[🌐 Configurar Contenido Web]
+    K --> L[✅ Verificar Servicios]
+```
+
+### 📊 **Tabla Comparativa de Responsabilidades**
+
+| **Aspecto**      | **🏗️ Terraform**    | **⚙️ Ansible**                    |
+| ---------------- | ------------------- | --------------------------------- |
+| **Scope**        | Infraestructura     | Configuración                     |
+| **Cuándo actúa** | Antes (provisión)   | Después (configuración)           |
+| **Qué gestiona** | Recursos de nube    | Software y servicios              |
+| **Ejemplos**     | EC2, S3, VPC, RDS   | Apache, MySQL, archivos, usuarios |
+| **Estado**       | Terraform State     | Idempotencia                      |
+| **Conectividad** | APIs de proveedores | SSH, WinRM                        |
+| **Lenguaje**     | HCL (HashiCorp)     | YAML                              |
+
+## 🎭 **Ejemplo Práctico del Flujo**
+
+### 1️⃣ **Terraform ejecuta:**
+
+```bash
+# Crea infraestructura en AWS
+terraform apply
+```
+
+**Resultado:**
+
+- ✅ Instancia EC2 creada con IP `54.226.112.73`
+- ✅ Security Group configurado (puertos 22, 80)
+- ✅ Apache instalado básicamente
+- ✅ Archivo [`ip.txt`](terraform-ansible-lab/ip.txt) generado
+
+### 2️⃣ **Script de transición:**
+
+```bash
+# Genera inventario dinámico para Ansible
+IP=$(cat ip.txt)
+sed "s/{{ public_ip }}/$IP/" ansible/hosts.ini > ansible/hosts-ready.ini
+```
+
+**Resultado:**
+
+```ini
+[webservers]
+54.226.112.73 ansible_user=ec2-user ansible_ssh_private_key_file=../demo-key.pem
+```
+
+### 3️⃣ **Ansible ejecuta:**
+
+```bash
+# Configura y personaliza el servidor
+ansible-playbook -i ansible/hosts-ready.ini ansible/playbook.yml
+```
+
+**Resultado:**
+
+- ✅ Sistema actualizado completamente
+- ✅ Apache configurado con templates personalizados
+- ✅ Página web personalizada creada
+- ✅ Firewall configurado detalladamente
+- ✅ Verificaciones automáticas realizadas
+
+## 🤝 **¿Por qué usar ambos juntos?**
+
+### **🏗️ Terraform es mejor para:**
+
+- 🚀 **Velocidad de provisión** - Crea recursos rápidamente
+- 🔄 **Gestión de estado** - Sabe qué existe y qué no
+- ☁️ **Multi-cloud** - Funciona con AWS, Azure, GCP
+- 📊 **Planificación** - Muestra qué va a cambiar antes de aplicar
+
+### **⚙️ Ansible es mejor para:**
+
+- 🎯 **Precisión de configuración** - Control granular sobre servicios
+- 📦 **Gestión de software** - Instalación y configuración de aplicaciones
+- 🔄 **Mantenimiento continuo** - Actualiza configuraciones existentes
+- 👥 **Gestión de múltiples hosts** - Orquesta cambios en grupos de servidores
+
+## 🎯 **Analogía del Mundo Real**
+
+```
+🏗️ TERRAFORM = CONSTRUCTOR DE CASAS
+   │
+   ├── Construye la estructura (EC2, redes)
+   ├── Instala servicios básicos (electricidad, agua)
+   └── Entrega las llaves (SSH keys, IPs)
+
+⚙️ ANSIBLE = DECORADOR DE INTERIORES
+   │
+   ├── Configura los muebles (Apache, MySQL)
+   ├── Personaliza la decoración (páginas web, configs)
+   ├── Instala electrodomésticos (servicios adicionales)
+   └── Mantiene todo funcionando (actualizaciones, monitoreo)
+```
+
+## 🚀 **Ejecución con run.sh**
+
+Nuestro script [`run.sh`](terraform-ansible-lab/run.sh) orquesta ambas herramientas:
+
+1. **🏗️ FASE TERRAFORM** (líneas 8-26)
+
+   - Limpia estado anterior
+   - Inicializa providers
+   - Aplica configuración
+   - Espera que la instancia esté lista
+
+2. **🔄 FASE TRANSICIÓN** (líneas 28-35)
+
+   - Lee IP generada por Terraform
+   - Crea inventario dinámico para Ansible
+   - Verifica conectividad SSH
+
+3. **⚙️ FASE ANSIBLE** (líneas 37-40)
+   - Ejecuta playbook completo
+   - Configura servicios detalladamente
+   - Verifica que todo funcione
+
+¡Esta separación de responsabilidades hace que tu infraestructura sea más mantenible, escalable y robusta! 🎉
+
 ## 🏗️ Arquitectura del Sistema
 
 ```
