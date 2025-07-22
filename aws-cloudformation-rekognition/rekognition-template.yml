@@ -44,47 +44,39 @@ Resources:
           import boto3
           import base64
           import json
-          import cgi
-          import io
 
           rekognition = boto3.client('rekognition')
 
           def lambda_handler(event, context):
               try:
-                  content_type = event.get('headers', {}).get('Content-Type') or event.get('headers', {}).get('content-type')
+                  # Obtener el tipo de contenido del encabezado
+                  content_type = event['headers'].get('Content-Type') or event['headers'].get('content-type', '')
+
+                  if 'application/json' not in content_type:
+                      raise Exception("Unsupported Content-Type. Only application/json is allowed.")
+
                   body = event['body']
+                  if isinstance(body, bytes):
+                      body = body.decode("utf-8")
 
-                  if event.get('isBase64Encoded'):
-                      body = base64.b64decode(body)
+                  if event.get("isBase64Encoded", False):
+                      body = base64.b64decode(body).decode("utf-8")
 
-                  if content_type and 'multipart/form-data' in content_type:
-                      # Parse multipart form
-                      env = {'REQUEST_METHOD': 'POST'}
-                      headers = {'content-type': content_type}
-                      fs = cgi.FieldStorage(fp=io.BytesIO(body), environ=env, headers=headers)
+                  json_body = json.loads(body)
 
-                      if 'file' not in fs:
-                          raise Exception("No 'file' field in form data.")
+                  if "image" not in json_body:
+                      raise Exception("Missing 'image' in JSON body.")
 
-                      image_data = fs['file'].file.read()
-
-                  elif content_type and 'application/json' in content_type:
-                      # Parse JSON with base64
-                      json_body = json.loads(body if isinstance(body, str) else body.decode())
-                      if 'image' not in json_body:
-                          raise Exception("No 'image' key in JSON body.")
-                      image_data = base64.b64decode(json_body['image'])
-
-                  else:
-                      raise Exception(f"Unsupported Content-Type: {content_type}")
+                  image_bytes = base64.b64decode(json_body['image'])
 
                   response = rekognition.detect_labels(
-                      Image={'Bytes': image_data},
+                      Image={'Bytes': image_bytes},
                       MaxLabels=5,
                       MinConfidence=70
                   )
 
                   labels = [label['Name'] for label in response['Labels']]
+
                   return {
                       "statusCode": 200,
                       "headers": {
@@ -109,6 +101,9 @@ Resources:
     Type: AWS::ApiGateway::RestApi
     Properties:
       Name: RekognitionApi
+      BinaryMediaTypes:
+        - multipart/form-data
+        - application/octet-stream
 
   RekognitionApiResource:
     Type: AWS::ApiGateway::Resource
